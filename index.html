@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Lights Out</title>
+<style>
+:root{--bg1:#0b1220;--bg2:#0f172a;--panel:rgba(2,6,23,.6);--panel-border:rgba(255,255,255,.08);--text:#fff}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{min-height:100vh;background:linear-gradient(var(--bg1),var(--bg2));color:var(--text);display:flex;align-items:center;justify-content:center;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"}
+#app{width:100%;max-width:520px;padding:16px}
+.header{text-align:center;margin-bottom:12px}
+.title-glow{margin:0;font-weight:900;font-size:32px;letter-spacing:-.3px;text-transform:uppercase;background:linear-gradient(90deg,#22d3ee,#a78bfa,#f472b6,#f59e0b,#22d3ee);-webkit-background-clip:text;background-clip:text;color:transparent;animation:hueShift 6s linear infinite;text-shadow:0 0 12px rgba(167,139,250,.25)}
+.subtitle{margin:4px 0 0;opacity:.85;font-size:13px}
+@keyframes hueShift{0%{filter:hue-rotate(0deg) drop-shadow(0 0 8px rgba(34,211,238,.25))}50%{filter:hue-rotate(180deg) drop-shadow(0 0 10px rgba(244,114,182,.3))}100%{filter:hue-rotate(360deg) drop-shadow(0 0 8px rgba(245,158,11,.25))}}
+.hud{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.hud .label{font-size:10px;letter-spacing:1px;opacity:.7;text-transform:uppercase}
+.hud .value{font-size:20px;font-weight:700}
+.hud .right{display:flex;gap:8px;align-items:center}
+.lives-row{display:flex;gap:6px;align-items:center;margin-bottom:14px}
+.lives{display:flex;gap:6px}
+.life{width:14px;height:14px;border-radius:3px;background:#f87171}.life.dead{background:rgba(255,255,255,.12)}
+.on-count{margin-left:auto;font-size:12px;opacity:.7}
+.board{background:var(--panel);border:1px solid var(--panel-border);border-radius:16px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);backdrop-filter:blur(6px)}
+.grid{display:grid;gap:8px;grid-template-columns:repeat(5,1fr)}
+.cell{aspect-ratio:1/1;width:100%;border-radius:12px;border:1px solid rgba(148,163,184,.4);background:rgba(15,23,42,.8);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+.cell.warning{animation:pulse .6s ease-in-out infinite alternate}
+@keyframes pulse{from{transform:scale(1);filter:brightness(1)}to{transform:scale(.97);filter:brightness(.92)}}
+.controls{margin-top:14px;display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap}
+.btn{padding:10px 16px;border-radius:12px;border:none;font-weight:700;cursor:pointer;color:white;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.small{padding:8px 12px;border-radius:10px}
+.green{background:#10b981}.amber{background:#f59e0b}.blue{background:#0ea5e9}.red{background:#ef4444}
+.hidden{display:none}
+.mute{width:40px;height:34px;border-radius:10px;border:none;color:white;font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.25);background:#10b981}
+.tips{margin-top:10px;text-align:center;font-size:12px;opacity:.75}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <h1 class="title-glow">Lights Out</h1>
+    <p class="subtitle">Keep the lights off. Tap fast, score high.</p>
+  </header>
+
+  <section class="hud">
+    <div><div class="label">Score</div><div id="score" class="value">0</div></div>
+    <div><div class="label">Level</div><div id="level" class="value">1</div></div>
+    <div class="right">
+      <button id="muteBtn" class="mute" aria-label="Mute/Unmute">🔊</button>
+      <div><div class="label">Best</div><div id="best" class="value">0</div></div>
+    </div>
+  </section>
+
+  <section class="lives-row">
+    <div id="lives" class="lives"></div>
+    <div class="on-count">On: <span id="onCount">0</span></div>
+  </section>
+
+  <section class="board"><div id="grid" class="grid"></div></section>
+
+  <section class="controls">
+    <button id="startBtn" class="btn green">Start</button>
+    <button id="pauseBtn" class="btn amber hidden">Pause</button>
+    <button id="resumeBtn" class="btn blue hidden">Resume</button>
+    <button id="restartBtn" class="btn red hidden">Restart</button>
+  </section>
+
+  <footer class="tips">
+    <div>Tip: quick taps build a streak for bonus points. Don’t let a light time out!</div>
+    <div>Space/Enter to start; R to restart after game over.</div>
+    <div>If you don’t hear audio, press <b>Start</b> once and make sure your phone isn’t on silent.</div>
+  </footer>
+</div>
+
+<script>
+/* ======= Logic (same as before, just inlined) ======= */
+const GRID=5, MAX_LIVES=5, CELL_TIMEOUT=2.2, START_SPAWN_INTERVAL=1.0, MIN_SPAWN_INTERVAL=0.28, LEVEL_UP_EVERY=12, SCORE_PER_HIT=10, STREAK_BONUS=2;
+const COLORS=["#60a5fa","#f87171","#34d399","#a78bfa","#fbbf24","#f472b6","#38bdf8","#fdba74"];
+const COLOR_PITCH={"#60a5fa":392,"#f87171":523.25,"#34d399":440,"#a78bfa":493.88,"#fbbf24":659.25,"#f472b6":587.33,"#38bdf8":349.23,"#fdba74":466.16};
+const randInt=(n)=>Math.floor(Math.random()*n), randChoice=(a)=>a[randInt(a.length)];
+const gridEl=document.getElementById("grid"), scoreEl=document.getElementById("score"), levelEl=document.getElementById("level"), bestEl=document.getElementById("best"), livesEl=document.getElementById("lives"), onCountEl=document.getElementById("onCount");
+const startBtn=document.getElementById("startBtn"), pauseBtn=document.getElementById("pauseBtn"), resumeBtn=document.getElementById("resumeBtn"), restartBtn=document.getElementById("restartBtn"), muteBtn=document.getElementById("muteBtn");
+let lifeBoxes=[], cells=Array(GRID*GRID).fill(0).map(()=>({lit:false,ttl:0,color:null,el:null}));
+function renderLives(lives){livesEl.innerHTML="";lifeBoxes=[];for(let i=0;i<MAX_LIVES;i++){const d=document.createElement("div");d.className="life"+(i>=lives?" dead":"");livesEl.appendChild(d);lifeBoxes.push(d)}}
+cells.forEach((c,i)=>{const b=document.createElement("button");b.className="cell";b.addEventListener("click",()=>clickCell(i));c.el=b;gridEl.appendChild(b)});
+let running=false, gameOver=false, level=1, lives=MAX_LIVES, score=0, best=Number(localStorage.getItem("lights_out_best")||0), streak=0, spawnTimer=0, levelTimer=0, muted=false;
+bestEl.textContent=best; renderLives(lives);
+const spawnInterval=()=>Math.max(MIN_SPAWN_INTERVAL, START_SPAWN_INTERVAL-(level-1)*0.08);
+function reset(){cells.forEach(c=>{c.lit=false;c.ttl=0;c.color=null;updateCellVisual(c)});score=0;streak=0;lives=MAX_LIVES;level=1;gameOver=false;running=false;spawnTimer=0;levelTimer=0;scoreEl.textContent=score;levelEl.textContent=level;bestEl.textContent=best;renderLives(lives);updateOnCount();showButtons({start:true,pause:false,resume:false,restart:false})}
+function showButtons({start,pause,resume,restart}){startBtn.classList.toggle("hidden",!start);pauseBtn.classList.toggle("hidden",!pause);resumeBtn.classList.toggle("hidden",!resume);restartBtn.classList.toggle("hidden",!restart)}
+// Audio
+const audio=(()=>{const state={ctx:null,master:null,muted:false};async function ensure(){if(!state.ctx){const Ctx=window.AudioContext||window.webkitAudioContext;const ctx=new Ctx();const master=ctx.createGain();master.gain.value=.8;master.connect(ctx.destination);state.ctx=ctx;state.master=master}if(state.ctx.state==="suspended"){try{await state.ctx.resume()}catch(e){}}return state}function setMuted(m){state.muted=m;if(state.master) state.master.gain.value=m?0:.8}function env(ctx,dur=.25,peak=.9){const g=ctx.createGain();const t=ctx.currentTime;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(peak,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+dur);return g}function pluck(ctx,freq,dur=.25){if(state.muted)return;const o=ctx.createOscillator();o.type="triangle";o.frequency.value=freq;const g=env(ctx,dur,.9);o.connect(g).connect(state.master);o.start();o.stop(ctx.currentTime+dur)}async function tap(color){const {ctx}=await ensure();pluck(ctx, COLOR_PITCH[color]??523.25,.25)}async function hit(){const {ctx}=await ensure();if(state.muted)return;const o=ctx.createOscillator();o.type="sine";o.frequency.setValueAtTime(160,ctx.currentTime);o.frequency.exponentialRampToValueAtTime(70,ctx.currentTime+.18);const g=env(ctx,.18,.7);o.connect(g).connect(state.master);o.start();o.stop(ctx.currentTime+.2)}async function levelUp(){const {ctx}=await ensure();[392,440,494,523,587].forEach((f,i)=>setTimeout(()=>pluck(ctx,f,.2),i*100))}async function gameOver(){const {ctx}=await ensure();[659,493,392,329,261].forEach((f,i)=>setTimeout(()=>pluck(ctx,f,.25),i*160))}return{ensure,setMuted,tap,hit,levelUp,gameOver}})();
+const unlock=async()=>{await audio.ensure();audio.setMuted(muted)};window.addEventListener("touchstart",unlock,{passive:true});window.addEventListener("mousedown",unlock);
+// UI handlers
+startBtn.addEventListener("click",()=>{unlock();reset();running=true;showButtons({start:false,pause:true,resume:false,restart:false})});
+pauseBtn.addEventListener("click",()=>{running=false;showButtons({start:false,pause:false,resume:true,restart:false})});
+resumeBtn.addEventListener("click",()=>{unlock();running=true;showButtons({start:false,pause:true,resume:false,restart:false})});
+restartBtn.addEventListener("click",()=>{unlock();reset();running=true;showButtons({start:false,pause:true,resume:false,restart:false})});
+document.addEventListener("keydown",(e)=>{if(!running&&!gameOver&&(e.key===" "||e.key==="Enter")){unlock();reset();running=true}if(gameOver&&(e.key==="r"||e.key==="R")){unlock();reset();running=true}});
+muteBtn.addEventListener("click",()=>{muted=!muted;muteBtn.textContent=muted?"🔇":"🔊";audio.setMuted(muted)});
+// visuals
+function updateCellVisual(c){if(!c.el)return;c.el.style.background=c.lit?c.color:"rgba(15,23,42,.8)";c.el.style.borderColor=c.lit?"rgba(0,0,0,.35)":"rgba(148,163,184,.4)";c.el.classList.toggle("warning",c.lit&&c.ttl<=.55)}
+function updateOnCount(){onCountEl.textContent=cells.filter(c=>c.lit).length}
+// actions
+function clickCell(i){const cur=cells[i];if(!cur.lit)return;cur.lit=false;cur.ttl=0;updateCellVisual(cur);score+=SCORE_PER_HIT+streak*STREAK_BONUS;streak+=1;scoreEl.textContent=Math.floor(score);audio.tap(cur.color);updateOnCount()}
+function loseLife(){lives=Math.max(0,lives-1);lifeBoxes.forEach((b,idx)=>b.classList.toggle("dead",idx>=lives));streak=0;audio.hit();if(lives===0){running=false;gameOver=true;best=Math.max(best,Math.floor(score));localStorage.setItem("lights_out_best",String(best));bestEl.textContent=best;audio.gameOver();showButtons({start:false,pause:false,resume:false,restart:true})}}
+let last=performance.now();function frame(now){const dt=(now-last)/1000;last=now;if(running){let lost=false;for(let i=0;i<cells.length;i++){const c=cells[i];if(!c.lit)continue;c.ttl-=dt;if(c.ttl<=0){c.lit=false;c.ttl=0;updateCellVisual(c);lost=true}else{updateCellVisual(c)}}if(lost){loseLife();updateOnCount()}spawnTimer-=dt;if(spawnTimer<=0){const off=[];for(let i=0;i<cells.length;i++)if(!cells[i].lit)off.push(i);if(off.length>0){const idx=off[randInt(off.length)];const c=cells[idx];c.lit=true;c.ttl=CELL_TIMEOUT;c.color=randChoice(COLORS);updateCellVisual(c);updateOnCount()}const jitter=Math.random()*0.2-0.1;spawnTimer=Math.max(MIN_SPAWN_INTERVAL, spawnInterval()+jitter)}levelTimer+=dt;if(levelTimer>=LEVEL_UP_EVERY){level+=1;levelEl.textContent=level;levelTimer=0;audio.levelUp()}}requestAnimationFrame(frame)}requestAnimationFrame(frame);
+// init
+function buildGrid(){gridEl.innerHTML="";cells.forEach(c=>gridEl.appendChild(c.el))}buildGrid();reset();
+</script>
+</body>
+</html>
